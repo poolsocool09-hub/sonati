@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@fortune-inc/tw-voucher": "^1.1.2",
+    "@opecgame/twapi": "^1.2.1",
+    "axios": "^1.13.6",
+    "discord.js": "^14.25.1",
+    "fs": "^0.0.1-security",
+    "wallet-chii": "^0.0.1-security"
+  }
+}
