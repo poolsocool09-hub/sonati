@@ -24,7 +24,6 @@ const ERROR_EMOJI = "❌"
 const SHOP_BANNER = "https://i.imgur.com/your-banner.png" // เปลี่ยนเป็น Banner ของคุณ
 
 // ===================== CONFIG =====================
-const TOKEN = "MTQ4MTgyNTY3NTM4NzA3NjgxMA.GbaSVn.wy08voSmSxlIGsS6DegM6FVyJL7uyOKZvJT4n8"
 const CLIENT_ID = "1481825675387076810"
 const OWNER_ID = "1303250795252285501"
 const TOPUP_CHANNEL = "1482274014096523274"
