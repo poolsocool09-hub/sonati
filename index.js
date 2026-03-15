@@ -178,7 +178,6 @@ async function createForumThread(guild, productName, minecraftName, product) {
       .setTitle(`🛒 ${productName}`)
       .setDescription(
         `${createDivider()}\n\n` +
-        `> 👤 **IGN:** \`${minecraftName}\`\n` +
         `> 💰 **ราคา:** \`${formatMoney(product.price)} บาท\`\n` +
         `> 🎭 **ผ้าคลุม:** ${product.cloak}\n` +
         `> ⭐ **แรงค์:** ${product.rank}\n` +
@@ -262,8 +261,6 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
           })
           .setTitle(`🛒 ${productName}`)
           .setDescription(
-            `${createDivider()}\n\n` +
-            `> 👤 **IGN:** \`${minecraftName}\`\n\n` +
             `${createDivider()}\n\n` +
             `🔴 **สถานะ:** ขายแล้ว`
           )
