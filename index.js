@@ -45,6 +45,10 @@ const CUSTOMER_ROLE_ID = process.env.CUSTOMER_ROLE_ID || "YOUR_CUSTOMER_ROLE_ID"
 // Forum Channel สำหรับโพสต์ ID สินค้า
 const FORUM_CHANNEL_ID = process.env.FORUM_CHANNEL_ID || "YOUR_FORUM_CHANNEL_ID"
 
+// ===================== UPDATE STOCK CHANNEL CONFIG =====================
+// ห้องสำหรับแจ้งเตือนการอัปเดต stock (เมื่อมีการซื้อสินค้า)
+const UPDATE_STOCK_CHANNEL = process.env.UPDATE_STOCK_CHANNEL || "YOUR_UPDATE_STOCK_CHANNEL_ID"
+
 // ===================== DATABASE PATH =====================
 const DB_DIR = path.join(__dirname, "database")
 
@@ -676,13 +680,14 @@ client.on("interactionCreate", async interaction => {
         `> 💰 **ราคา:** \`${formatMoney(price)} บาท\`\n` +
         `> 🎭 **ผ้าคลุม:** ${cloak}\n` +
         `> ⭐ **แรงค์:** ${rank}\n` +
-        `> 📝 **รายละเอียด:** ${detail}\n\n` +
+        `> 📝 **รายละเอียด:** ${detail}\n` +
+        `> 📤 **สถานะ:** \`ยังไม่ออก\`\n\n` +
         `${createDivider()}\n\n` +
         `🛒 **พร้อมขายแล้ววันนี้!**`
       )
       .setColor(COLORS.GOLD)
       .setThumbnail(`https://visage.surgeplay.com/full/512/${minecraftName}`)
-      .setFooter({ text: "Sonati Seller • สินค้าใหม่" })
+      .setFooter({ text: "Sonati Seller • สินค้าใหม่ • ยังไม่ออก" })
       .setTimestamp()
 
     await interaction.channel.send({
@@ -1031,32 +1036,38 @@ client.on("interactionCreate", async interaction => {
         interaction.editReply({ embeds: [successEmbed] })
       }
 
-      // แจ้งเตือน owner
+      // แจ้งเตือนไปที่ห้อง UPDATE STOCK
       try {
-        const owner = await client.users.fetch(OWNER_ID).catch(() => null)
-        if (owner) {
-          const ownerEmbed = new EmbedBuilder()
-            .setTitle("🛒 มีการซื้อสินค้า")
-            .setDescription(
-              `${createDivider()}\n\n` +
-              `> 👤 **ผู้ซื้อ:** ${interaction.user.tag}\n` +
-              `> 🆔 **ID:** \`${interaction.user.id}\`\n` +
-              `> 📦 **สินค้า:** ${item.name}\n` +
-              `> 🎮 **อีเมล:** \`${minecraftName}\`\n` +
-              `${password ? `> 🔑 **โค้ดเปลี่ยนเมล:** \`${password}\`\n` : ''}` +
-              `> 💰 **ราคา:** \`${formatMoney(item.price)} บาท\`\n` +
-              `> 📊 **stock คงเหลือ:** \`${stock[productName]?.length || 0} ชิ้น\`\n` +
-              `> 📨 **ส่ง DM:** ${dmSent ? '✅' : '❌'}\n` +
-              `> 📌 **Forum Thread:** อัปเดตเป็น SOLD แล้ว\n\n` +
-              `${createDivider()}`
-            )
-            .setColor(dmSent ? COLORS.SUCCESS : COLORS.WARNING)
-            .setTimestamp()
+        if (UPDATE_STOCK_CHANNEL && UPDATE_STOCK_CHANNEL !== "YOUR_UPDATE_STOCK_CHANNEL_ID") {
+          const updateStockChannel = interaction.guild.channels.cache.get(UPDATE_STOCK_CHANNEL)
+          if (updateStockChannel) {
+            const stockUpdateEmbed = new EmbedBuilder()
+              .setTitle("🛒 มีการซื้อสินค้า")
+              .setDescription(
+                `${createDivider()}\n\n` +
+                `> 👤 **ผู้ซื้อ:** ${interaction.user.tag}\n` +
+                `> 🆔 **ID:** \`${interaction.user.id}\`\n` +
+                `> 📦 **สินค้า:** ${item.name}\n` +
+                `> 🎮 **อีเมล:** \`${minecraftName}\`\n` +
+                `${password ? `> 🔑 **โค้ดเปลี่ยนเมล:** \`${password}\`\n` : ''}` +
+                `> 💰 **ราคา:** \`${formatMoney(item.price)} บาท\`\n` +
+                `> 📊 **stock คงเหลือ:** \`${stock[productName]?.length || 0} ชิ้น\`\n` +
+                `> 📨 **ส่ง DM:** ${dmSent ? '✅' : '❌'}\n` +
+                `> 📌 **Forum Thread:** อัปเดตเป็น SOLD แล้ว\n` +
+                `> 📤 **สถานะ:** \`ออกแล้ว\`\n\n` +
+                `${createDivider()}`
+              )
+              .setColor(dmSent ? COLORS.SUCCESS : COLORS.WARNING)
+              .setFooter({ text: "Sonati Seller • ออกแล้ว" })
+              .setTimestamp()
 
-          await owner.send({ embeds: [ownerEmbed] })
+            await updateStockChannel.send({ embeds: [stockUpdateEmbed] })
+          } else {
+            console.log("⚠️ ไม่พบห้อง UPDATE STOCK")
+          }
         }
-      } catch (ownerError) {
-        console.error("แจ้งเตือน Owner ไม่สำเร็จ:", ownerError)
+      } catch (notifyError) {
+        console.error("แจ้งเตือนห้อง UPDATE STOCK ไม่สำเร็จ:", notifyError)
       }
 
       // อัปเดต panel message
