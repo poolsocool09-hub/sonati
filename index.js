@@ -36,6 +36,10 @@ const SLIPOK_KEY = process.env.SLIPOK_KEY || "YOUR_SLIPOK_KEY"
 const YOUR_PHONE_NUMBER = process.env.PHONE_NUMBER || "YOUR_PHONE"
 const PORT = process.env.PORT || 3000
 
+// ===================== CUSTOMER ROLE CONFIG =====================
+// ยศลูกค้าที่จะให้เมื่อเติมเงิน (ใส่ Role ID ที่ต้องการ)
+const CUSTOMER_ROLE_ID = process.env.CUSTOMER_ROLE_ID || "YOUR_CUSTOMER_ROLE_ID"
+
 // ===================== DATABASE PATH =====================
 const DB_DIR = path.join(__dirname, "database")
 
@@ -112,6 +116,40 @@ function createDivider() {
   return "━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
+// ===================== ฟังก์ชันให้ยศลูกค้า =====================
+async function giveCustomerRole(guild, userId) {
+  try {
+    if (!CUSTOMER_ROLE_ID || CUSTOMER_ROLE_ID === "YOUR_CUSTOMER_ROLE_ID") {
+      console.log("⚠️ ยังไม่ได้ตั้งค่า CUSTOMER_ROLE_ID")
+      return false
+    }
+
+    const member = await guild.members.fetch(userId).catch(() => null)
+    if (!member) {
+      console.log(`⚠️ ไม่พบสมาชิก ${userId}`)
+      return false
+    }
+
+    const role = guild.roles.cache.get(CUSTOMER_ROLE_ID)
+    if (!role) {
+      console.log(`⚠️ ไม่พบยศ ${CUSTOMER_ROLE_ID}`)
+      return false
+    }
+
+    if (member.roles.cache.has(CUSTOMER_ROLE_ID)) {
+      console.log(`ℹ️ ${member.user.tag} มียศลูกค้าอยู่แล้ว`)
+      return true
+    }
+
+    await member.roles.add(role)
+    console.log(`✅ ให้ยศลูกค้าแก่ ${member.user.tag} สำเร็จ`)
+    return true
+  } catch (error) {
+    console.error("❌ ไม่สามารถให้ยศลูกค้าได้:", error)
+    return false
+  }
+}
+
 // ===================== SLASH COMMANDS SETUP =====================
 const commands = [
   new SlashCommandBuilder()
@@ -184,7 +222,29 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("qr")
-    .setDescription("🏦 แสดง QR Code สำหรับเติมเงิน")
+    .setDescription("🏦 แสดง QR Code สำหรับเติมเงิน"),
+
+  // ===================== คำสั่งใหม่: addmoney =====================
+  new SlashCommandBuilder()
+    .setName("addmoney")
+    .setDescription("💵 เพิ่มเงินให้ผู้ใช้ (Owner Only)")
+    .addUserOption(option =>
+      option.setName("user").setDescription("ผู้ใช้ที่ต้องการเพิ่มเงิน").setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option.setName("amount").setDescription("จำนวนเงินที่ต้องการเพิ่ม").setRequired(true).setMinValue(1)
+    ),
+
+  // ===================== คำสั่งใหม่: removemoney =====================
+  new SlashCommandBuilder()
+    .setName("removemoney")
+    .setDescription("💸 ลบเงินจากผู้ใช้ (Owner Only)")
+    .addUserOption(option =>
+      option.setName("user").setDescription("ผู้ใช้ที่ต้องการลบเงิน").setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option.setName("amount").setDescription("จำนวนเงินที่ต้องการลบ").setRequired(true).setMinValue(1)
+    )
 ]
 
 // ===================== REGISTER COMMANDS =====================
@@ -312,7 +372,7 @@ client.on("interactionCreate", async interaction => {
   }
 
   // ===================== OWNER ONLY COMMANDS =====================
-  if (["panel", "createproduct", "addstock"].includes(commandName)) {
+  if (["panel", "createproduct", "addstock", "addmoney", "removemoney"].includes(commandName)) {
     if (user.id !== OWNER_ID) {
       const embed = new EmbedBuilder()
         .setDescription("❌ **คำสั่งนี้ใช้ได้เฉพาะ Owner เท่านั้น**")
@@ -320,6 +380,72 @@ client.on("interactionCreate", async interaction => {
 
       return interaction.reply({ embeds: [embed], ephemeral: true })
     }
+  }
+
+  // ===================== /addmoney =====================
+  if (commandName === "addmoney") {
+    const targetUser = interaction.options.getUser("user")
+    const amount = interaction.options.getInteger("amount")
+
+    let wallet = loadJSON("./database/wallet.json", {})
+    const oldBalance = wallet[targetUser.id] || 0
+    wallet[targetUser.id] = oldBalance + amount
+    saveJSON("./database/wallet.json", wallet)
+
+    // ให้ยศลูกค้า
+    let roleGiven = false
+    if (interaction.guild) {
+      roleGiven = await giveCustomerRole(interaction.guild, targetUser.id)
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("✅ เพิ่มเงินสำเร็จ!")
+      .setDescription(
+        `${createDivider()}\n\n` +
+        `> 👤 **ผู้ใช้:** ${targetUser}\n` +
+        `> 💵 **เพิ่มเงิน:** \`+${formatMoney(amount)} บาท\`\n` +
+        `> 💰 **ยอดเดิม:** \`${formatMoney(oldBalance)} บาท\`\n` +
+        `> 💳 **ยอดใหม่:** \`${formatMoney(wallet[targetUser.id])} บาท\`\n` +
+        `${roleGiven ? `> 🎖️ **ยศลูกค้า:** ให้ยศเรียบร้อย\n` : ''}` +
+        `\n${createDivider()}`
+      )
+      .setColor(COLORS.SUCCESS)
+      .setFooter({ text: `โดย ${user.tag}` })
+      .setTimestamp()
+
+    return interaction.reply({ embeds: [embed], ephemeral: true })
+  }
+
+  // ===================== /removemoney =====================
+  if (commandName === "removemoney") {
+    const targetUser = interaction.options.getUser("user")
+    const amount = interaction.options.getInteger("amount")
+
+    let wallet = loadJSON("./database/wallet.json", {})
+    const oldBalance = wallet[targetUser.id] || 0
+
+    // ไม่ให้ติดลบ
+    const newBalance = Math.max(0, oldBalance - amount)
+    const actualRemoved = oldBalance - newBalance
+
+    wallet[targetUser.id] = newBalance
+    saveJSON("./database/wallet.json", wallet)
+
+    const embed = new EmbedBuilder()
+      .setTitle("✅ ลบเงินสำเร็จ!")
+      .setDescription(
+        `${createDivider()}\n\n` +
+        `> 👤 **ผู้ใช้:** ${targetUser}\n` +
+        `> 💸 **ลบเงิน:** \`-${formatMoney(actualRemoved)} บาท\`\n` +
+        `> 💰 **ยอดเดิม:** \`${formatMoney(oldBalance)} บาท\`\n` +
+        `> 💳 **ยอดใหม่:** \`${formatMoney(newBalance)} บาท\`\n\n` +
+        `${createDivider()}`
+      )
+      .setColor(COLORS.WARNING)
+      .setFooter({ text: `โดย ${user.tag}` })
+      .setTimestamp()
+
+    return interaction.reply({ embeds: [embed], ephemeral: true })
   }
 
   // ===================== /createproduct =====================
@@ -940,13 +1066,20 @@ client.on("interactionCreate", async interaction => {
 
       saveJSON("./database/wallet.json", wallet)
 
+      // ให้ยศลูกค้าเมื่อเติมเงินสำเร็จ
+      let roleGiven = false
+      if (interaction.guild) {
+        roleGiven = await giveCustomerRole(interaction.guild, interaction.user.id)
+      }
+
       const successEmbed = new EmbedBuilder()
         .setTitle("✅ เติมเงินสำเร็จ!")
         .setDescription(
           `${createDivider()}\n\n` +
           `> 🧧 **รับซอง:** \`+${formatMoney(amount)} บาท\`\n` +
-          `> 💰 **ยอดเงินคงเหลือ:** \`${formatMoney(wallet[interaction.user.id])} บาท\`\n\n` +
-          `${createDivider()}\n\n` +
+          `> 💰 **ยอดเงินคงเหลือ:** \`${formatMoney(wallet[interaction.user.id])} บาท\`\n` +
+          `${roleGiven ? `> 🎖️ **ยศลูกค้า:** ได้รับยศเรียบร้อย!\n` : ''}` +
+          `\n${createDivider()}\n\n` +
           `✨ *ขอบคุณที่ใช้บริการ Sonati Seller*`
         )
         .setColor(COLORS.SUCCESS)
@@ -1052,13 +1185,20 @@ client.on("messageCreate", async message => {
     saveJSON("./database/wallet.json", wallet)
     saveJSON("./database/usedslips.json", used)
 
+    // ให้ยศลูกค้าเมื่อเติมเงินผ่านสลิปสำเร็จ
+    let roleGiven = false
+    if (message.guild) {
+      roleGiven = await giveCustomerRole(message.guild, message.author.id)
+    }
+
     const successEmbed = new EmbedBuilder()
       .setTitle("✅ เติมเงินสำเร็จ!")
       .setDescription(
         `${createDivider()}\n\n` +
         `> 💵 **เติมเงิน:** \`+${formatMoney(amount)} บาท\`\n` +
-        `> 💰 **คงเหลือ:** \`${formatMoney(wallet[message.author.id])} บาท\`\n\n` +
-        `${createDivider()}`
+        `> 💰 **คงเหลือ:** \`${formatMoney(wallet[message.author.id])} บาท\`\n` +
+        `${roleGiven ? `> 🎖️ **ยศลูกค้า:** ได้รับยศเรียบร้อย!\n` : ''}` +
+        `\n${createDivider()}`
       )
       .setColor(COLORS.SUCCESS)
       .setTimestamp()
