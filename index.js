@@ -707,7 +707,7 @@ client.on("interactionCreate", async interaction => {
     await interaction.reply({ embeds: [embed], ephemeral: true })
 
     const announceEmbed = new EmbedBuilder()
-      .setTitle("🎉 สินค้าใหม่มาแล้ว!")
+      .setTitle("🎉 ไอดีใหม่มาแล้ว!")
       .setDescription(
         `${createDivider()}\n\n` +
         `📦 **${name}**\n\n` +
@@ -721,11 +721,11 @@ client.on("interactionCreate", async interaction => {
       )
       .setColor(COLORS.GOLD)
       .setThumbnail(`https://visage.surgeplay.com/full/512/${minecraftName}`)
-      .setFooter({ text: "Sonati Seller • สินค้าใหม่ • ยังไม่ออก" })
+      .setFooter({ text: "Sonati Seller • ไอดีใหม่ • ยังไม่ออก" })
       .setTimestamp()
 
     await interaction.channel.send({
-      content: "@everyone 🔔 **สินค้าใหม่มาแล้ว!**",
+      content: "@everyone 🔔 **ไอดีใหม่มาแล้ว!**",
       embeds: [announceEmbed]
     })
 
