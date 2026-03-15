@@ -11,7 +11,8 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  ChannelType
 } = require("discord.js")
 const axios = require("axios")
 const fs = require("fs")
@@ -39,6 +40,10 @@ const PORT = process.env.PORT || 3000
 // ===================== CUSTOMER ROLE CONFIG =====================
 // ยศลูกค้าที่จะให้เมื่อเติมเงิน (ใส่ Role ID ที่ต้องการ)
 const CUSTOMER_ROLE_ID = process.env.CUSTOMER_ROLE_ID || "YOUR_CUSTOMER_ROLE_ID"
+
+// ===================== FORUM CHANNEL CONFIG =====================
+// Forum Channel สำหรับโพสต์ ID สินค้า
+const FORUM_CHANNEL_ID = process.env.FORUM_CHANNEL_ID || "YOUR_FORUM_CHANNEL_ID"
 
 // ===================== DATABASE PATH =====================
 const DB_DIR = path.join(__dirname, "database")
@@ -146,6 +151,112 @@ async function giveCustomerRole(guild, userId) {
     return true
   } catch (error) {
     console.error("❌ ไม่สามารถให้ยศลูกค้าได้:", error)
+    return false
+  }
+}
+
+// ===================== ฟังก์ชันสร้าง Forum Thread =====================
+async function createForumThread(guild, productName, minecraftName, product) {
+  try {
+    if (!FORUM_CHANNEL_ID || FORUM_CHANNEL_ID === "YOUR_FORUM_CHANNEL_ID") {
+      console.log("⚠️ ยังไม่ได้ตั้งค่า FORUM_CHANNEL_ID")
+      return null
+    }
+
+    const forumChannel = guild.channels.cache.get(FORUM_CHANNEL_ID)
+    if (!forumChannel || forumChannel.type !== ChannelType.GuildForum) {
+      console.log(`⚠️ ไม่พบ Forum Channel หรือไม่ใช่ Forum Channel: ${FORUM_CHANNEL_ID}`)
+      return null
+    }
+
+    // สร้าง embed สำหรับ Forum Thread
+    const embed = new EmbedBuilder()
+      .setTitle(`🎮 ${productName}`)
+      .setDescription(
+        `${createDivider()}\n\n` +
+        `> 👤 **IGN:** \`${minecraftName}\`\n` +
+        `> 💰 **ราคา:** \`${formatMoney(product.price)} บาท\`\n` +
+        `> 🎭 **ผ้าคลุม:** ${product.cloak}\n` +
+        `> ⭐ **แรงค์:** ${product.rank}\n` +
+        `> 📝 **รายละเอียด:** ${product.detail}\n\n` +
+        `${createDivider()}\n\n` +
+        `🟢 **สถานะ:** พร้อมขาย`
+      )
+      .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
+      .setColor(COLORS.SUCCESS)
+      .setFooter({ text: "Sonati Seller • ID พร้อมขาย" })
+      .setTimestamp()
+
+    // สร้าง Forum Thread ด้วยชื่อ IGN
+    const thread = await forumChannel.threads.create({
+      name: `IGN : ${minecraftName}`,
+      message: {
+        embeds: [embed]
+      },
+      reason: `สร้าง ID สินค้า: ${productName}`
+    })
+
+    console.log(`✅ สร้าง Forum Thread สำเร็จ: ${thread.name} (ID: ${thread.id})`)
+    return thread.id
+
+  } catch (error) {
+    console.error("❌ ไม่สามารถสร้าง Forum Thread ได้:", error)
+    return null
+  }
+}
+
+// ===================== ฟังก์ชันอัปเดต Forum Thread เมื่อขาย =====================
+async function markForumThreadAsSold(guild, threadId, productName, minecraftName) {
+  try {
+    if (!threadId) {
+      console.log("⚠️ ไม่มี Thread ID")
+      return false
+    }
+
+    const thread = guild.channels.cache.get(threadId) || await guild.channels.fetch(threadId).catch(() => null)
+
+    if (!thread) {
+      console.log(`⚠️ ไม่พบ Thread: ${threadId}`)
+      return false
+    }
+
+    // เปลี่ยนชื่อเป็น SOLD
+    await thread.setName(`SOLD`)
+    console.log(`✅ เปลี่ยนชื่อ Thread เป็น SOLD`)
+
+    // อัปเดต embed ใน thread
+    try {
+      const messages = await thread.messages.fetch({ limit: 1 })
+      const firstMessage = messages.first()
+
+      if (firstMessage && firstMessage.embeds.length > 0) {
+        const soldEmbed = new EmbedBuilder()
+          .setTitle(`🎮 ${productName}`)
+          .setDescription(
+            `${createDivider()}\n\n` +
+            `> 👤 **IGN:** \`${minecraftName}\`\n\n` +
+            `${createDivider()}\n\n` +
+            `🔴 **สถานะ:** ขายแล้ว`
+          )
+          .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
+          .setColor(COLORS.ERROR)
+          .setFooter({ text: "Sonati Seller • ขายแล้ว" })
+          .setTimestamp()
+
+        await firstMessage.edit({ embeds: [soldEmbed] })
+      }
+    } catch (msgError) {
+      console.log("⚠️ ไม่สามารถอัปเดต embed ใน thread:", msgError)
+    }
+
+    // Close (Archive) Thread
+    await thread.setArchived(true)
+    console.log(`✅ Close Thread สำเร็จ: ${threadId}`)
+
+    return true
+
+  } catch (error) {
+    console.error("❌ ไม่สามารถอัปเดต Forum Thread ได้:", error)
     return false
   }
 }
@@ -459,6 +570,7 @@ client.on("interactionCreate", async interaction => {
 
     let products = loadJSON("./database/products.json", [])
     let stock = loadJSON("./database/stock.json", {})
+    let forumThreads = loadJSON("./database/forum_threads.json", {})
 
     if (products.find(p => p.name.toLowerCase() === name.toLowerCase())) {
       return interaction.reply({
@@ -467,7 +579,11 @@ client.on("interactionCreate", async interaction => {
       })
     }
 
-    products.push({ id: Date.now(), name, price, cloak, rank, detail })
+    // ดึง minecraftName จาก account
+    const [minecraftName, password] = account.split(':')
+
+    const productId = Date.now()
+    products.push({ id: productId, name, price, cloak, rank, detail })
     saveJSON("./database/products.json", products)
 
     if (!stock[name]) {
@@ -475,6 +591,22 @@ client.on("interactionCreate", async interaction => {
     }
     stock[name].push(account)
     saveJSON("./database/stock.json", stock)
+
+    // สร้าง Forum Thread
+    let threadId = null
+    let forumCreated = false
+    if (interaction.guild) {
+      threadId = await createForumThread(interaction.guild, name, minecraftName, { price, cloak, rank, detail })
+      if (threadId) {
+        // เก็บ mapping ระหว่าง account กับ threadId
+        if (!forumThreads[name]) {
+          forumThreads[name] = {}
+        }
+        forumThreads[name][account] = threadId
+        saveJSON("./database/forum_threads.json", forumThreads)
+        forumCreated = true
+      }
+    }
 
     const embed = new EmbedBuilder()
       .setTitle("✅ สร้างสินค้าสำเร็จ!")
@@ -485,8 +617,9 @@ client.on("interactionCreate", async interaction => {
         `🎭 **ผ้าคลุม:** ${cloak}\n` +
         `⭐ **แรงค์:** ${rank}\n` +
         `📝 **รายละเอียด:** ${detail}\n` +
-        `📥 **Stock:** ${stock[name].length} ชิ้น\n\n` +
-        `${createDivider()}`
+        `📥 **Stock:** ${stock[name].length} ชิ้น\n` +
+        `${forumCreated ? `📌 **Forum Thread:** สร้างแล้ว (IGN : ${minecraftName})\n` : ''}` +
+        `\n${createDivider()}`
       )
       .setColor(COLORS.SUCCESS)
       .setTimestamp()
@@ -506,7 +639,7 @@ client.on("interactionCreate", async interaction => {
         `🛒 **พร้อมขายแล้ววันนี้!**`
       )
       .setColor(COLORS.GOLD)
-      .setThumbnail(`https://visage.surgeplay.com/full/512/${name}`)
+      .setThumbnail(`https://visage.surgeplay.com/full/512/${minecraftName}`)
       .setFooter({ text: "Sonati Seller • สินค้าใหม่" })
       .setTimestamp()
 
@@ -534,6 +667,7 @@ client.on("interactionCreate", async interaction => {
     }
 
     let stock = loadJSON("./database/stock.json", {})
+    let forumThreads = loadJSON("./database/forum_threads.json", {})
 
     if (!stock[product.name]) {
       stock[product.name] = []
@@ -542,10 +676,27 @@ client.on("interactionCreate", async interaction => {
     stock[product.name].push(account)
     saveJSON("./database/stock.json", stock)
 
+    // ดึง minecraftName และสร้าง Forum Thread
+    const [minecraftName] = account.split(':')
+    let forumCreated = false
+
+    if (interaction.guild) {
+      const threadId = await createForumThread(interaction.guild, product.name, minecraftName, product)
+      if (threadId) {
+        if (!forumThreads[product.name]) {
+          forumThreads[product.name] = {}
+        }
+        forumThreads[product.name][account] = threadId
+        saveJSON("./database/forum_threads.json", forumThreads)
+        forumCreated = true
+      }
+    }
+
     const embed = new EmbedBuilder()
       .setDescription(
         `✅ เพิ่ม stock **${product.name}** สำเร็จ!\n` +
-        `📦 คงเหลือ: **${stock[product.name].length}** ชิ้น`
+        `📦 คงเหลือ: **${stock[product.name].length}** ชิ้น\n` +
+        `${forumCreated ? `📌 Forum Thread: สร้างแล้ว (IGN : ${minecraftName})` : ''}`
       )
       .setColor(COLORS.SUCCESS)
 
@@ -641,6 +792,7 @@ client.on("interactionCreate", async interaction => {
       let stock = loadJSON("./database/stock.json", {})
       let wallet = loadJSON("./database/wallet.json", {})
       let soldHistory = loadJSON("./database/sold_history.json", [])
+      let forumThreads = loadJSON("./database/forum_threads.json", {})
 
       const item = products.find(p => p.name === productName)
 
@@ -692,6 +844,16 @@ client.on("interactionCreate", async interaction => {
         price: item.price,
         boughtAt: new Date().toISOString()
       })
+
+      // อัปเดต Forum Thread เป็น SOLD และ Close
+      if (interaction.guild && forumThreads[productName] && forumThreads[productName][account]) {
+        const threadId = forumThreads[productName][account]
+        await markForumThreadAsSold(interaction.guild, threadId, productName, minecraftName)
+
+        // ลบ mapping ออก
+        delete forumThreads[productName][account]
+        saveJSON("./database/forum_threads.json", forumThreads)
+      }
 
       let productDeleted = false
       if (stock[productName]?.length === 0) {
@@ -842,7 +1004,8 @@ client.on("interactionCreate", async interaction => {
               `${password ? `> 🔑 **โค้ดเปลี่ยนเมล:** \`${password}\`\n` : ''}` +
               `> 💰 **ราคา:** \`${formatMoney(item.price)} บาท\`\n` +
               `> 📊 **stock คงเหลือ:** \`${stock[productName]?.length || 0} ชิ้น\`\n` +
-              `> 📨 **ส่ง DM:** ${dmSent ? '✅' : '❌'}\n\n` +
+              `> 📨 **ส่ง DM:** ${dmSent ? '✅' : '❌'}\n` +
+              `> 📌 **Forum Thread:** อัปเดตเป็น SOLD แล้ว\n\n` +
               `${createDivider()}`
             )
             .setColor(dmSent ? COLORS.SUCCESS : COLORS.WARNING)
