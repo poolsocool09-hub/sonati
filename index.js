@@ -187,7 +187,7 @@ async function createForumThread(guild, productName, minecraftName, product) {
         `\`\`\`${product.detail}\`\`\`\n` +
         `${createDivider()}`
       )
-      .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
+      .setImage(`https://visage.surgeplay.com/full/512/${productName}`)
       .setColor(COLORS.SUCCESS)
       .setFooter({ text: "🟢 พร้อมขาย • Sonati Seller", iconURL: TMONEY_ICON })
       .setTimestamp()
@@ -207,9 +207,9 @@ async function createForumThread(guild, productName, minecraftName, product) {
 
     const row = new ActionRowBuilder().addComponents(buyButton, topupButton)
 
-    // สร้าง Forum Thread ด้วยชื่อ IGN
+    // สร้าง Forum Thread ด้วยชื่อสินค้า
     const thread = await forumChannel.threads.create({
-      name: `IGN : ${minecraftName}`,
+      name: `IGN : ${productName}`,
       message: {
         embeds: [embed],
         components: [row]
@@ -241,16 +241,20 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
       return false
     }
 
-    // เปลี่ยนชื่อเป็น SOLD
-    await thread.setName(`SOLD`)
-    console.log(`✅ เปลี่ยนชื่อ Thread เป็น SOLD`)
+    // เปลี่ยนชื่อเป็น SOLD + ชื่อสินค้า
+    await thread.setName(`SOLD : ${productName}`)
+    console.log(`✅ เปลี่ยนชื่อ Thread เป็น SOLD : ${productName}`)
 
     // อัปเดต embed และปุ่มใน thread
     try {
-      const messages = await thread.messages.fetch({ limit: 1 })
-      const firstMessage = messages.first()
+      // ดึง starter message ของ Forum Thread
+      const firstMessage = await thread.fetchStarterMessage().catch(async () => {
+        // fallback: ถ้า fetchStarterMessage ไม่ทำงาน ลองดึงแบบปกติ
+        const messages = await thread.messages.fetch({ limit: 10 })
+        return messages.last() // ข้อความแรกสุด (เก่าสุด)
+      })
 
-      if (firstMessage && firstMessage.embeds.length > 0) {
+      if (firstMessage && firstMessage.embeds && firstMessage.embeds.length > 0) {
         const soldEmbed = new EmbedBuilder()
           .setAuthor({
             name: "SONATI SELLER",
@@ -263,7 +267,7 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
             `${createDivider()}\n\n` +
             `🔴 **สถานะ:** ขายแล้ว`
           )
-          .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
+          .setImage(`https://visage.surgeplay.com/full/512/${productName}`)
           .setColor(COLORS.ERROR)
           .setFooter({ text: "🔴 ขายแล้ว • Sonati Seller", iconURL: TMONEY_ICON })
           .setTimestamp()
