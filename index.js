@@ -171,27 +171,48 @@ async function createForumThread(guild, productName, minecraftName, product) {
 
     // สร้าง embed สำหรับ Forum Thread
     const embed = new EmbedBuilder()
-      .setTitle(`🎮 ${productName}`)
+      .setAuthor({
+        name: "SONATI SELLER",
+        iconURL: TMONEY_ICON
+      })
+      .setTitle(`🛒 ${productName}`)
       .setDescription(
         `${createDivider()}\n\n` +
         `> 👤 **IGN:** \`${minecraftName}\`\n` +
         `> 💰 **ราคา:** \`${formatMoney(product.price)} บาท\`\n` +
         `> 🎭 **ผ้าคลุม:** ${product.cloak}\n` +
         `> ⭐ **แรงค์:** ${product.rank}\n` +
-        `> 📝 **รายละเอียด:** ${product.detail}\n\n` +
         `${createDivider()}\n\n` +
-        `🟢 **สถานะ:** พร้อมขาย`
+        `📝 **รายละเอียด:**\n` +
+        `\`\`\`${product.detail}\`\`\`\n` +
+        `${createDivider()}`
       )
       .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
       .setColor(COLORS.SUCCESS)
-      .setFooter({ text: "Sonati Seller • ID พร้อมขาย" })
+      .setFooter({ text: "🟢 พร้อมขาย • Sonati Seller", iconURL: TMONEY_ICON })
       .setTimestamp()
+
+    // สร้างปุ่มซื้อและเติมเงิน
+    const buyButton = new ButtonBuilder()
+      .setCustomId(`buy_${productName}`)
+      .setLabel(`ซื้อ ${productName}`)
+      .setStyle(ButtonStyle.Success)
+      .setEmoji("🛒")
+
+    const topupButton = new ButtonBuilder()
+      .setCustomId("show_topup_options")
+      .setLabel("เติมเงิน")
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji("💰")
+
+    const row = new ActionRowBuilder().addComponents(buyButton, topupButton)
 
     // สร้าง Forum Thread ด้วยชื่อ IGN
     const thread = await forumChannel.threads.create({
       name: `IGN : ${minecraftName}`,
       message: {
-        embeds: [embed]
+        embeds: [embed],
+        components: [row]
       },
       reason: `สร้าง ID สินค้า: ${productName}`
     })
@@ -224,14 +245,18 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
     await thread.setName(`SOLD`)
     console.log(`✅ เปลี่ยนชื่อ Thread เป็น SOLD`)
 
-    // อัปเดต embed ใน thread
+    // อัปเดต embed และปุ่มใน thread
     try {
       const messages = await thread.messages.fetch({ limit: 1 })
       const firstMessage = messages.first()
 
       if (firstMessage && firstMessage.embeds.length > 0) {
         const soldEmbed = new EmbedBuilder()
-          .setTitle(`🎮 ${productName}`)
+          .setAuthor({
+            name: "SONATI SELLER",
+            iconURL: TMONEY_ICON
+          })
+          .setTitle(`🛒 ${productName}`)
           .setDescription(
             `${createDivider()}\n\n` +
             `> 👤 **IGN:** \`${minecraftName}\`\n\n` +
@@ -240,10 +265,26 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
           )
           .setImage(`https://visage.surgeplay.com/full/512/${minecraftName}`)
           .setColor(COLORS.ERROR)
-          .setFooter({ text: "Sonati Seller • ขายแล้ว" })
+          .setFooter({ text: "🔴 ขายแล้ว • Sonati Seller", iconURL: TMONEY_ICON })
           .setTimestamp()
 
-        await firstMessage.edit({ embeds: [soldEmbed] })
+        // สร้างปุ่ม disable
+        const soldButton = new ButtonBuilder()
+          .setCustomId(`sold_${productName}`)
+          .setLabel("ขายแล้ว")
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji("🔴")
+          .setDisabled(true)
+
+        const topupButton = new ButtonBuilder()
+          .setCustomId("show_topup_options")
+          .setLabel("เติมเงิน")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("💰")
+
+        const row = new ActionRowBuilder().addComponents(soldButton, topupButton)
+
+        await firstMessage.edit({ embeds: [soldEmbed], components: [row] })
       }
     } catch (msgError) {
       console.log("⚠️ ไม่สามารถอัปเดต embed ใน thread:", msgError)
