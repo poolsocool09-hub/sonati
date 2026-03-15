@@ -49,6 +49,11 @@ const FORUM_CHANNEL_ID = process.env.FORUM_CHANNEL_ID || "YOUR_FORUM_CHANNEL_ID"
 // ห้องสำหรับแจ้งเตือนการอัปเดต stock (เมื่อมีการซื้อสินค้า)
 const UPDATE_STOCK_CHANNEL = process.env.UPDATE_STOCK_CHANNEL || "YOUR_UPDATE_STOCK_CHANNEL_ID"
 
+// ===================== FORUM TAGS CONFIG =====================
+// Forum Tags สำหรับสถานะสินค้า (ต้องสร้าง Tag ใน Forum Channel ก่อน แล้วนำ ID มาใส่)
+const TAG_NOT_RELEASED = process.env.TAG_NOT_RELEASED || "YOUR_TAG_NOT_RELEASED_ID" // แท็ก "ยังไม่ออก"
+const TAG_RELEASED = process.env.TAG_RELEASED || "YOUR_TAG_RELEASED_ID" // แท็ก "ออกแล้ว"
+
 // ===================== DATABASE PATH =====================
 const DB_DIR = path.join(__dirname, "database")
 
@@ -210,6 +215,16 @@ async function createForumThread(guild, productName, minecraftName, product) {
 
     const row = new ActionRowBuilder().addComponents(buyButton, topupButton)
 
+    // เตรียม applied tags (ถ้ามีการตั้งค่า TAG_NOT_RELEASED)
+    const appliedTags = []
+    if (TAG_NOT_RELEASED && TAG_NOT_RELEASED !== "YOUR_TAG_NOT_RELEASED_ID") {
+      // ตรวจสอบว่า tag มีอยู่ใน forum channel หรือไม่
+      const tagExists = forumChannel.availableTags.find(t => t.id === TAG_NOT_RELEASED)
+      if (tagExists) {
+        appliedTags.push(TAG_NOT_RELEASED)
+      }
+    }
+
     // สร้าง Forum Thread ด้วยชื่อสินค้า
     const thread = await forumChannel.threads.create({
       name: `IGN : ${productName}`,
@@ -217,6 +232,7 @@ async function createForumThread(guild, productName, minecraftName, product) {
         embeds: [embed],
         components: [row]
       },
+      appliedTags: appliedTags.length > 0 ? appliedTags : undefined,
       reason: `สร้าง ID สินค้า: ${productName}`
     })
 
@@ -247,6 +263,24 @@ async function markForumThreadAsSold(guild, threadId, productName, minecraftName
     // เปลี่ยนชื่อเป็น SOLD + ชื่อสินค้า
     await thread.setName(`SOLD : ${productName}`)
     console.log(`✅ เปลี่ยนชื่อ Thread เป็น SOLD : ${productName}`)
+
+    // เปลี่ยน tag จาก "ยังไม่ออก" เป็น "ออกแล้ว"
+    try {
+      if (TAG_RELEASED && TAG_RELEASED !== "YOUR_TAG_RELEASED_ID") {
+        const forumChannel = thread.parent
+        if (forumChannel && forumChannel.availableTags) {
+          const releasedTagExists = forumChannel.availableTags.find(t => t.id === TAG_RELEASED)
+          if (releasedTagExists) {
+            // ลบ tag "ยังไม่ออก" และเพิ่ม tag "ออกแล้ว"
+            const newTags = [TAG_RELEASED]
+            await thread.setAppliedTags(newTags)
+            console.log(`✅ เปลี่ยน tag เป็น "ออกแล้ว" สำเร็จ`)
+          }
+        }
+      }
+    } catch (tagError) {
+      console.log("⚠️ ไม่สามารถเปลี่ยน tag ได้:", tagError)
+    }
 
     // อัปเดต embed และปุ่มใน thread
     try {
