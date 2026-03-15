@@ -903,24 +903,37 @@ client.on("interactionCreate", async interaction => {
 
     await interaction.editReply({ embeds: [loadingEmbed] })
 
+    // Extract voucher hash from link
+    const voucherMatch = giftLink.match(/v=([a-zA-Z0-9]+)/)
+    if (!voucherMatch) {
+      const errorEmbed = new EmbedBuilder()
+        .setTitle("❌ ลิงก์ไม่ถูกต้อง")
+        .setDescription("ไม่พบรหัสซองอังเปาในลิงก์")
+        .setColor(COLORS.ERROR)
+      return interaction.editReply({ embeds: [errorEmbed] })
+    }
+
+    const voucherHash = voucherMatch[1]
+
     const response = await axios.post(
-      "https://tmwapi.com/api/v1/angpao",
+      `https://gift.truemoney.com/campaign/vouchers/${voucherHash}/redeem`,
       {
-        phone: YOUR_PHONE_NUMBER,
-        link: giftLink
+        mobile: YOUR_PHONE_NUMBER,
+        voucher_hash: voucherHash
       },
       {
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         },
-        timeout: 10000
+        timeout: 15000
       }
     )
 
     const data = response.data
 
-    if (data && data.amount) {
-      const amount = parseFloat(data.amount)
+    if (data && data.status && data.status.code === "SUCCESS" && data.data && data.data.voucher) {
+      const amount = parseFloat(data.data.voucher.amount_baht)
 
       let wallet = loadJSON("./database/wallet.json", {})
       wallet[interaction.user.id] = (wallet[interaction.user.id] || 0) + amount
@@ -942,14 +955,19 @@ client.on("interactionCreate", async interaction => {
       await interaction.editReply({ embeds: [successEmbed] })
 
     } else {
+      // ตรวจสอบ error message จาก API
+      const errorMsg = data?.status?.message || "ไม่ทราบสาเหตุ"
+
       const errorEmbed = new EmbedBuilder()
         .setTitle("❌ รับซองไม่สำเร็จ")
         .setDescription(
           `${createDivider()}\n\n` +
+          `**สาเหตุ:** ${errorMsg}\n\n` +
           `**สาเหตุที่เป็นไปได้:**\n` +
           `> • ซองถูกใช้ไปแล้ว\n` +
           `> • ซองหมดอายุ\n` +
-          `> • ลิงก์ไม่ถูกต้อง\n\n` +
+          `> • ลิงก์ไม่ถูกต้อง\n` +
+          `> • เบอร์โทรศัพท์ไม่ถูกต้อง\n\n` +
           `${createDivider()}`
         )
         .setColor(COLORS.ERROR)
@@ -960,15 +978,26 @@ client.on("interactionCreate", async interaction => {
   } catch (error) {
     console.error("Angpao API Error:", error?.response?.data || error)
 
+    const errorData = error?.response?.data
+    let errorMessage = "ไม่สามารถเชื่อมต่อระบบได้"
+
+    if (errorData?.status?.message) {
+      errorMessage = errorData.status.message
+    } else if (error?.response?.status === 400) {
+      errorMessage = "ซองอังเปานี้ถูกใช้ไปแล้วหรือหมดอายุ"
+    } else if (error?.response?.status === 404) {
+      errorMessage = "ไม่พบซองอังเปานี้"
+    }
+
     const errorEmbed = new EmbedBuilder()
-      .setTitle("⚠️ ระบบรับซองมีปัญหา")
+      .setTitle("❌ รับซองไม่สำเร็จ")
       .setDescription(
         `${createDivider()}\n\n` +
-        `ไม่สามารถเชื่อมต่อระบบได้\n` +
-        `กรุณาลองใหม่อีกครั้งภายหลัง\n\n` +
+        `**${errorMessage}**\n\n` +
+        `กรุณาตรวจสอบลิงก์และลองใหม่อีกครั้ง\n\n` +
         `${createDivider()}`
       )
-      .setColor(COLORS.WARNING)
+      .setColor(COLORS.ERROR)
 
     await interaction.editReply({ embeds: [errorEmbed] })
   }
