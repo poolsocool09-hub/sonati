@@ -1,10 +1,16 @@
 {
+  "name": "sonati-seller-bot",
+  "version": "1.0.0",
+  "description": "Discord Bot for Sonati Seller",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@fortune-inc/tw-voucher": "^1.1.2",
-    "@opecgame/twapi": "^1.2.1",
-    "axios": "^1.13.6",
-    "discord.js": "^14.25.1",
-    "fs": "^0.0.1-security",
-    "wallet-chii": "^0.0.1-security"
+    "discord.js": "^14.14.1",
+    "axios": "^1.6.2"
   }
 }
