@@ -1475,8 +1475,25 @@ process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error)
 })
 
+// ===================== CLIENT ERROR HANDLER =====================
+client.on('error', (error) => {
+  console.error('❌ Client Error:', error.message)
+})
+
+client.on('warn', (warning) => {
+  console.warn('⚠️ Client Warning:', warning)
+})
+
+client.on('debug', (info) => {
+  // แสดงเฉพาะ debug ที่สำคัญ
+  if (info.includes('Heartbeat') || info.includes('Session') || info.includes('token')) {
+    console.log('🔍 Debug:', info)
+  }
+})
+
 // ===================== LOGIN =====================
 console.log("🔄 กำลังเริ่มต้นบอท...")
+console.log("🔑 Token length:", TOKEN ? TOKEN.length : 0, "characters")
 console.log("🔑 Token status:", TOKEN && TOKEN !== "YOUR_TOKEN_HERE" ? "✅ Token ถูกตั้งค่าแล้ว" : "❌ ยังไม่ได้ตั้งค่า Token!")
 
 if (!TOKEN || TOKEN === "YOUR_TOKEN_HERE") {
@@ -1490,13 +1507,34 @@ if (!TOKEN || TOKEN === "YOUR_TOKEN_HERE") {
   console.error("   6. กด Save Changes แล้ว Manual Deploy")
 } else {
   console.log("🔄 กำลัง Login เข้า Discord...")
+
+  // ตั้ง timeout 30 วินาที
+  const loginTimeout = setTimeout(() => {
+    console.error("❌ LOGIN TIMEOUT! ใช้เวลานานเกิน 30 วินาที")
+    console.error("⚠️ สาเหตุที่เป็นไปได้:")
+    console.error("   1. Token ไม่ถูกต้อง - กรุณา Reset Token ใหม่จาก Discord Developer Portal")
+    console.error("   2. Network มีปัญหา")
+    console.error("   3. Discord API มีปัญหาชั่วคราว")
+  }, 30000)
+
   client.login(TOKEN)
     .then(() => {
+      clearTimeout(loginTimeout)
       console.log("🔑 Login สำเร็จ!")
     })
     .catch(error => {
+      clearTimeout(loginTimeout)
       console.error("❌ LOGIN FAILED!")
-      console.error("❌ Error:", error.message)
-      console.error("⚠️ Token อาจไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสอบ Token ใน Discord Developer Portal")
+      console.error("❌ Error Code:", error.code)
+      console.error("❌ Error Message:", error.message)
+
+      if (error.code === 'TokenInvalid' || error.message.includes('token')) {
+        console.error("⚠️ TOKEN ไม่ถูกต้อง!")
+        console.error("📝 วิธีแก้ไข:")
+        console.error("   1. ไปที่ https://discord.com/developers/applications")
+        console.error("   2. เลือก Application ของคุณ")
+        console.error("   3. ไปที่ Bot > Reset Token")
+        console.error("   4. Copy Token ใหม่ไปใส่ใน Render Environment")
+      }
     })
 }
