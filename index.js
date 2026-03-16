@@ -1468,3 +1468,15 @@ client.on("messageCreate", async message => {
 
 // ===================== LOGIN =====================
 client.login(TOKEN)
+  .then(() => {
+    console.log("🔑 Login สำเร็จ!")
+  })
+  .catch(error => {
+    console.error("❌ LOGIN FAILED!")
+    console.error("❌ Error:", error.message)
+    if (TOKEN === "YOUR_TOKEN_HERE" || !TOKEN) {
+      console.error("⚠️ กรุณาตั้งค่า DISCORD_TOKEN ใน Environment Variables ของ Render")
+    } else {
+      console.error("⚠️ Token อาจไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสอบ Token ใน Discord Developer Portal")
+    }
+  })
