@@ -1466,17 +1466,37 @@ client.on("messageCreate", async message => {
   }
 })
 
+// ===================== ERROR HANDLERS =====================
+process.on('unhandledRejection', (error) => {
+  console.error('❌ Unhandled Rejection:', error)
+})
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error)
+})
+
 // ===================== LOGIN =====================
-client.login(TOKEN)
-  .then(() => {
-    console.log("🔑 Login สำเร็จ!")
-  })
-  .catch(error => {
-    console.error("❌ LOGIN FAILED!")
-    console.error("❌ Error:", error.message)
-    if (TOKEN === "YOUR_TOKEN_HERE" || !TOKEN) {
-      console.error("⚠️ กรุณาตั้งค่า DISCORD_TOKEN ใน Environment Variables ของ Render")
-    } else {
+console.log("🔄 กำลังเริ่มต้นบอท...")
+console.log("🔑 Token status:", TOKEN && TOKEN !== "YOUR_TOKEN_HERE" ? "✅ Token ถูกตั้งค่าแล้ว" : "❌ ยังไม่ได้ตั้งค่า Token!")
+
+if (!TOKEN || TOKEN === "YOUR_TOKEN_HERE") {
+  console.error("❌ ❌ ❌ ERROR: ยังไม่ได้ตั้งค่า DISCORD_TOKEN ❌ ❌ ❌")
+  console.error("📝 วิธีแก้ไข:")
+  console.error("   1. ไปที่ Render Dashboard")
+  console.error("   2. เลือก Service ของคุณ")
+  console.error("   3. ไปที่ Environment > Add Environment Variable")
+  console.error("   4. ใส่ Key: DISCORD_TOKEN")
+  console.error("   5. ใส่ Value: Token ของบอทจาก Discord Developer Portal")
+  console.error("   6. กด Save Changes แล้ว Manual Deploy")
+} else {
+  console.log("🔄 กำลัง Login เข้า Discord...")
+  client.login(TOKEN)
+    .then(() => {
+      console.log("🔑 Login สำเร็จ!")
+    })
+    .catch(error => {
+      console.error("❌ LOGIN FAILED!")
+      console.error("❌ Error:", error.message)
       console.error("⚠️ Token อาจไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสอบ Token ใน Discord Developer Portal")
-    }
-  })
+    })
+}
